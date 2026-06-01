@@ -134,6 +134,7 @@ void MRGenerator::collectGlobals()
  */
 void MRGenerator::generateMRs_exh_step1(MemSSAStat* _stat)
 {
+    MemRegion::resetMRNum();
     stat = _stat;
 
     DBOUT(DGENERAL, outs() << pasMsg("Generate Memory Regions \n"));
@@ -185,6 +186,7 @@ void MRGenerator::generateMRs_exh_step2(MemSSAStat* _stat)
 
 void MRGenerator::generateMRs(MemSSAStat* _stat)
 {
+    MemRegion::resetMRNum();
     stat = _stat;
 
     DBOUT(DGENERAL, outs() << pasMsg("Generate Memory Regions \n"));

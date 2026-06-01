@@ -66,6 +66,11 @@ private:
     const NodeBS cptsSet;
 
 public:
+    /// Reset totalMRNum for deterministic region IDs
+    static inline void resetMRNum()
+    {
+        totalMRNum = 0;
+    }
     /// Constructor
     MemRegion(const NodeBS& cp) :
         rid(++totalMRNum), cptsSet(cp)
