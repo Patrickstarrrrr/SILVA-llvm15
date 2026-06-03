@@ -519,36 +519,61 @@ void VFG::addVFGNodes()
     }
 
     // initialize actual parameter nodes
+    std::vector<std::pair<const CallICFGNode*, const SVFIR::SVFVarList*>> sortedCallSiteArgs;
     for(SVFIR::CSToArgsListMap::iterator it = pag->getCallSiteArgsMap().begin(), eit = pag->getCallSiteArgsMap().end(); it !=eit; ++it)
+        sortedCallSiteArgs.push_back(std::make_pair(it->first, &it->second));
+    std::sort(sortedCallSiteArgs.begin(), sortedCallSiteArgs.end(),
+        [](const std::pair<const CallICFGNode*, const SVFIR::SVFVarList*>& a,
+           const std::pair<const CallICFGNode*, const SVFIR::SVFVarList*>& b)
+        {
+            return a.first->getId() < b.first->getId();
+        });
+    for(auto& cp : sortedCallSiteArgs)
     {
-
-        for(SVFIR::SVFVarList::iterator pit = it->second.begin(), epit = it->second.end(); pit!=epit; ++pit)
+        for(SVFIR::SVFVarList::const_iterator pit = cp.second->begin(), epit = cp.second->end(); pit!=epit; ++pit)
         {
             const PAGNode* pagNode = *pit;
             if (isInterestedPAGNode(pagNode))
-                addActualParmVFGNode(pagNode,it->first);
+                addActualParmVFGNode(pagNode,cp.first);
         }
     }
 
     // initialize actual return nodes (callsite return)
+    std::vector<std::pair<const RetICFGNode*, const PAGNode*>> sortedCallSiteRets;
     for(SVFIR::CSToRetMap::iterator it = pag->getCallSiteRets().begin(), eit = pag->getCallSiteRets().end(); it !=eit; ++it)
+        sortedCallSiteRets.push_back(std::make_pair(it->first, it->second));
+    std::sort(sortedCallSiteRets.begin(), sortedCallSiteRets.end(),
+        [](const std::pair<const RetICFGNode*, const PAGNode*>& a,
+           const std::pair<const RetICFGNode*, const PAGNode*>& b)
+        {
+            return a.first->getId() < b.first->getId();
+        });
+    for(auto& cp : sortedCallSiteRets)
     {
-
         /// for external function we do not create acutalRet VFGNode
         /// they are in the formal of AddrVFGNode if the external function returns an allocated memory
         /// if fun has body, it may also exist in isExtCall, e.g., xmalloc() in bzip2, spec2000.
-        if(isInterestedPAGNode(it->second) == false || hasDef(it->second))
+        if(isInterestedPAGNode(cp.second) == false || hasDef(cp.second))
             continue;
 
-        addActualRetVFGNode(it->second,it->first->getCallICFGNode());
+        addActualRetVFGNode(cp.second,cp.first->getCallICFGNode());
     }
 
     // initialize formal parameter nodes
+    std::vector<std::pair<const SVFFunction*, const SVFIR::SVFVarList*>> sortedFunArgs;
     for(SVFIR::FunToArgsListMap::iterator it = pag->getFunArgsMap().begin(), eit = pag->getFunArgsMap().end(); it !=eit; ++it)
+        sortedFunArgs.push_back(std::make_pair(it->first, &it->second));
+    std::sort(sortedFunArgs.begin(), sortedFunArgs.end(),
+        [](const std::pair<const SVFFunction*, const SVFIR::SVFVarList*>& a,
+           const std::pair<const SVFFunction*, const SVFIR::SVFVarList*>& b)
+        {
+            return a.first->getName() < b.first->getName();
+        });
+    for(auto& fp : sortedFunArgs)
     {
-        const SVFFunction* func = it->first;
+        const SVFFunction* func = fp.first;
 
-        for(SVFIR::SVFVarList::iterator pit = it->second.begin(), epit = it->second.end(); pit!=epit; ++pit)
+        for(SVFIR::SVFVarList::const_iterator pit = fp.second->begin(), epit = fp.second->end(); pit!=epit; ++pit)
         {
             const PAGNode* param = *pit;
             if (isInterestedPAGNode(param) == false || hasBlackHoleConstObjAddrAsDef(param))
@@ -590,11 +615,20 @@ void VFG::addVFGNodes()
     }
 
     // initialize formal return nodes (callee return)
+    std::vector<std::pair<const SVFFunction*, const PAGNode*>> sortedFunRets;
     for (SVFIR::FunToRetMap::iterator it = pag->getFunRets().begin(), eit = pag->getFunRets().end(); it != eit; ++it)
+        sortedFunRets.push_back(std::make_pair(it->first, it->second));
+    std::sort(sortedFunRets.begin(), sortedFunRets.end(),
+        [](const std::pair<const SVFFunction*, const PAGNode*>& a,
+           const std::pair<const SVFFunction*, const PAGNode*>& b)
+        {
+            return a.first->getName() < b.first->getName();
+        });
+    for (auto& fp : sortedFunRets)
     {
-        const SVFFunction* func = it->first;
+        const SVFFunction* func = fp.first;
 
-        const PAGNode* uniqueFunRetNode = it->second;
+        const PAGNode* uniqueFunRetNode = fp.second;
 
         RetPESet retPEs;
         if (uniqueFunRetNode->hasOutgoingEdges(SVFStmt::Ret))

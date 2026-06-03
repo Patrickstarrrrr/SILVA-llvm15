@@ -36,6 +36,8 @@
 #include "Util/Options.h"
 #include "MemoryModel/PointerAnalysisImpl.h"
 #include <fstream>
+#include <algorithm>
+#include <vector>
 #include "Util/Options.h"
 
 using namespace SVF;
@@ -264,59 +266,113 @@ void SVFG::addSVFGNodesForAddrTakenVars()
 
     /// set defs for address-taken vars defined at phi/chi/call
     /// create corresponding def and use nodes for address-taken vars (a.k.a MRVers)
-    /// initialize memory SSA phi nodes (phi of address-taken variables)
+    /// Sort phi nodes by basic block name and MRID for deterministic NodeID assignment
+    std::vector<std::pair<const SVFBasicBlock*, MemSSA::PHI*>> sortedPhis;
     for(MemSSA::BBToPhiSetMap::iterator it = mssa->getBBToPhiSetMap().begin(),
             eit = mssa->getBBToPhiSetMap().end(); it!=eit; ++it)
     {
         for(PHISet::iterator pi = it->second.begin(), epi = it->second.end(); pi!=epi; ++pi)
-        {
-            MemSSA::PHI* phi =  *pi;
-            const SVFInstruction* inst = phi->getBasicBlock()->front();
-            addIntraMSSAPHISVFGNode(pag->getICFG()->getICFGNode(inst), phi->opVerBegin(), phi->opVerEnd(),phi->getResVer(), totalVFGNode++);
-        }
+            sortedPhis.push_back(std::make_pair(it->first, *pi));
     }
-    /// initialize memory SSA entry chi nodes
+    std::sort(sortedPhis.begin(), sortedPhis.end(),
+        [](const std::pair<const SVFBasicBlock*, MemSSA::PHI*>& a,
+           const std::pair<const SVFBasicBlock*, MemSSA::PHI*>& b)
+        {
+            if (a.first->getName() != b.first->getName())
+                return a.first->getName() < b.first->getName();
+            return a.second->getResVer()->getMR()->getMRID() < b.second->getResVer()->getMR()->getMRID();
+        });
+    for(auto& p : sortedPhis)
+    {
+        MemSSA::PHI* phi = p.second;
+        const SVFInstruction* inst = phi->getBasicBlock()->front();
+        addIntraMSSAPHISVFGNode(pag->getICFG()->getICFGNode(inst), phi->opVerBegin(), phi->opVerEnd(),phi->getResVer(), totalVFGNode++);
+    }
+    /// Sort entry chi nodes by function name and MRID for deterministic NodeID assignment
+    std::vector<std::pair<const SVFFunction*, const MemSSA::ENTRYCHI*>> sortedEntryChis;
     for(MemSSA::FunToEntryChiSetMap::iterator it = mssa->getFunToEntryChiSetMap().begin(),
             eit = mssa->getFunToEntryChiSetMap().end(); it!=eit; ++it)
     {
         for(CHISet::iterator pi = it->second.begin(), epi = it->second.end(); pi!=epi; ++pi)
-        {
-            const MemSSA::ENTRYCHI* chi = SVFUtil::cast<ENTRYCHI>(*pi);
-            addFormalINSVFGNode(pag->getICFG()->getFunEntryICFGNode(chi->getFunction()), chi->getResVer(), totalVFGNode++);
-        }
+            sortedEntryChis.push_back(std::make_pair(it->first, SVFUtil::cast<ENTRYCHI>(*pi)));
     }
-    /// initialize memory SSA return mu nodes
+    std::sort(sortedEntryChis.begin(), sortedEntryChis.end(),
+        [](const std::pair<const SVFFunction*, const MemSSA::ENTRYCHI*>& a,
+           const std::pair<const SVFFunction*, const MemSSA::ENTRYCHI*>& b)
+        {
+            if (a.first->getName() != b.first->getName())
+                return a.first->getName() < b.first->getName();
+            return a.second->getResVer()->getMR()->getMRID() < b.second->getResVer()->getMR()->getMRID();
+        });
+    for(auto& p : sortedEntryChis)
+    {
+        const MemSSA::ENTRYCHI* chi = p.second;
+        addFormalINSVFGNode(pag->getICFG()->getFunEntryICFGNode(chi->getFunction()), chi->getResVer(), totalVFGNode++);
+    }
+    /// Sort return mu nodes by function name and MRID for deterministic NodeID assignment
+    std::vector<std::pair<const SVFFunction*, const MemSSA::RETMU*>> sortedRetMus;
     for(MemSSA::FunToReturnMuSetMap::iterator it = mssa->getFunToRetMuSetMap().begin(),
             eit = mssa->getFunToRetMuSetMap().end(); it!=eit; ++it)
     {
         for(MUSet::iterator pi = it->second.begin(), epi = it->second.end(); pi!=epi; ++pi)
-        {
-            const MemSSA::RETMU* mu = SVFUtil::cast<RETMU>(*pi);
-            addFormalOUTSVFGNode(pag->getICFG()->getFunExitICFGNode(mu->getFunction()), mu->getMRVer(), totalVFGNode++);
-        }
+            sortedRetMus.push_back(std::make_pair(it->first, SVFUtil::cast<RETMU>(*pi)));
     }
-    /// initialize memory SSA callsite mu nodes
+    std::sort(sortedRetMus.begin(), sortedRetMus.end(),
+        [](const std::pair<const SVFFunction*, const MemSSA::RETMU*>& a,
+           const std::pair<const SVFFunction*, const MemSSA::RETMU*>& b)
+        {
+            if (a.first->getName() != b.first->getName())
+                return a.first->getName() < b.first->getName();
+            return a.second->getMRVer()->getMR()->getMRID() < b.second->getMRVer()->getMR()->getMRID();
+        });
+    for(auto& p : sortedRetMus)
+    {
+        const MemSSA::RETMU* mu = p.second;
+        addFormalOUTSVFGNode(pag->getICFG()->getFunExitICFGNode(mu->getFunction()), mu->getMRVer(), totalVFGNode++);
+    }
+    /// Sort callsite mu nodes by callsite ID and MRID for deterministic NodeID assignment
+    std::vector<std::pair<const CallICFGNode*, const MemSSA::CALLMU*>> sortedCallMus;
     for(MemSSA::CallSiteToMUSetMap::iterator it = mssa->getCallSiteToMuSetMap().begin(),
             eit = mssa->getCallSiteToMuSetMap().end();
             it!=eit; ++it)
     {
         for(MUSet::iterator pi = it->second.begin(), epi = it->second.end(); pi!=epi; ++pi)
-        {
-            const MemSSA::CALLMU* mu = SVFUtil::cast<CALLMU>(*pi);
-            addActualINSVFGNode(mu->getCallSite(), mu->getMRVer(), totalVFGNode++);
-        }
+            sortedCallMus.push_back(std::make_pair(it->first, SVFUtil::cast<CALLMU>(*pi)));
     }
-    /// initialize memory SSA callsite chi nodes
+    std::sort(sortedCallMus.begin(), sortedCallMus.end(),
+        [](const std::pair<const CallICFGNode*, const MemSSA::CALLMU*>& a,
+           const std::pair<const CallICFGNode*, const MemSSA::CALLMU*>& b)
+        {
+            if (a.first->getId() != b.first->getId())
+                return a.first->getId() < b.first->getId();
+            return a.second->getMRVer()->getMR()->getMRID() < b.second->getMRVer()->getMR()->getMRID();
+        });
+    for(auto& p : sortedCallMus)
+    {
+        const MemSSA::CALLMU* mu = p.second;
+        addActualINSVFGNode(mu->getCallSite(), mu->getMRVer(), totalVFGNode++);
+    }
+    /// Sort callsite chi nodes by callsite ID and MRID for deterministic NodeID assignment
+    std::vector<std::pair<const CallICFGNode*, const MemSSA::CALLCHI*>> sortedCallChis;
     for(MemSSA::CallSiteToCHISetMap::iterator it = mssa->getCallSiteToChiSetMap().begin(),
             eit = mssa->getCallSiteToChiSetMap().end();
             it!=eit; ++it)
     {
         for(CHISet::iterator pi = it->second.begin(), epi = it->second.end(); pi!=epi; ++pi)
+            sortedCallChis.push_back(std::make_pair(it->first, SVFUtil::cast<CALLCHI>(*pi)));
+    }
+    std::sort(sortedCallChis.begin(), sortedCallChis.end(),
+        [](const std::pair<const CallICFGNode*, const MemSSA::CALLCHI*>& a,
+           const std::pair<const CallICFGNode*, const MemSSA::CALLCHI*>& b)
         {
-            const MemSSA::CALLCHI* chi = SVFUtil::cast<CALLCHI>(*pi);
-            addActualOUTSVFGNode(chi->getCallSite(), chi->getResVer(), totalVFGNode++);
-        }
-
+            if (a.first->getId() != b.first->getId())
+                return a.first->getId() < b.first->getId();
+            return a.second->getResVer()->getMR()->getMRID() < b.second->getResVer()->getMR()->getMRID();
+        });
+    for(auto& p : sortedCallChis)
+    {
+        const MemSSA::CALLCHI* chi = p.second;
+        addActualOUTSVFGNode(chi->getCallSite(), chi->getResVer(), totalVFGNode++);
     }
 }
 
