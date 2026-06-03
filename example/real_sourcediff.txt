@@ -1,0 +1,17 @@
+diff -N -r -X DiffPattern.txt before/test.cpp after/test.cpp
+3c3
+< void foo(int* p) {
+---
+> void foo(int* p, int* q) {
+7c7
+< void bar(int* q) {
+---
+> void bar(int* q, int* z) {
+11a12
+>     int z;
+13,14c14,15
+<     foo(&x);
+<     bar(&y);
+---
+>     foo(&x, &z);
+>     bar(&y, &z);
