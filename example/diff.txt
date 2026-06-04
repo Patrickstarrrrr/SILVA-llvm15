@@ -1,0 +1,9 @@
+diff -N -r oldDir/example.cpp newDir/example.cpp
+4c4
+<     *p = t1;
+---
+>     *p = t2;
+5c5
+<     *q = t2;
+---
+>     *q = t1;

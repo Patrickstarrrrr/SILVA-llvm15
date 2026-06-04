@@ -8,7 +8,6 @@ Debug+Asserts/
 autoconf/
 tests/result/
 doxygen/
-example/
 inc-test/
 .*
 !.gitignore
