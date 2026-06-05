@@ -104,6 +104,10 @@ endif()
 if(NOT EXISTS "${SVF_EXTAPI_CLANG}")
   set(SVF_EXTAPI_CLANG clang)
 endif()
+# Use bisheng-c clang if available to ensure IR compatibility
+if(EXISTS "$ENV{HOME}/bisheng_c/llvm-project/build/bin/clang")
+  set(SVF_EXTAPI_CLANG "$ENV{HOME}/bisheng_c/llvm-project/build/bin/clang")
+endif()
 add_custom_target(extapi_ir ALL
     COMMAND ${SVF_EXTAPI_CLANG} -w -S -c -Xclang -disable-O0-optnone -fno-discard-value-names -emit-llvm ${PROJECT_SOURCE_DIR}/svf-llvm/lib/extapi.c -o ${PROJECT_BINARY_DIR}/svf-llvm/extapi.bc
     DEPENDS ${PROJECT_SOURCE_DIR}/svf-llvm/lib/extapi.c

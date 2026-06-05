@@ -416,6 +416,18 @@ private:
     CallSiteToPointsToMap csToCallSiteRetPtsMap;
     CallSiteToPointsToMap csToCallSiteRetPtsMap_t;
 
+    /// After-state snapshots for correct incremental analysis
+    Map<const SVFFunction*, NodeBS> funToRefsMap_snapshot;
+    Map<const SVFFunction*, NodeBS> funToModsMap_snapshot;
+    Map<const CallICFGNode*, NodeBS> csToRefsMap_snapshot;
+    Map<const CallICFGNode*, NodeBS> csToModsMap_snapshot;
+    Map<const CallICFGNode*, NodeBS> csToCallSiteArgsPtsMap_snapshot;
+    Map<const CallICFGNode*, NodeBS> csToCallSiteRetPtsMap_snapshot;
+    NodeBS allGlobals_snapshot;
+
+    void saveAfterSnapshot();
+    void restoreAfterSnapshot();
+
     /// Map a pointer to its cached points-to chain;
     NodeToPTSSMap cachedPtsChainMap;
 
@@ -645,6 +657,10 @@ public:
     inline u32_t getMRNum() const
     {
         return memRegSet.size();
+    }
+
+    inline bool hasLocalModRefChanged() const {
+        return !mods_lsChangedFunctions.empty() || !refs_lsChangedFunctions.empty();
     }
 
     /// Destructor

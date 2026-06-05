@@ -165,6 +165,29 @@ void MRGenerator::generateMRs_exh_step1(MemSSAStat* _stat)
     if (Options::wjydebug()) {
         debugdump();
     }
+    saveAfterSnapshot();
+}
+
+void MRGenerator::saveAfterSnapshot()
+{
+    funToRefsMap_snapshot = funToRefsMap;
+    funToModsMap_snapshot = funToModsMap;
+    csToRefsMap_snapshot = csToRefsMap;
+    csToModsMap_snapshot = csToModsMap;
+    csToCallSiteArgsPtsMap_snapshot = csToCallSiteArgsPtsMap;
+    csToCallSiteRetPtsMap_snapshot = csToCallSiteRetPtsMap;
+    allGlobals_snapshot = allGlobals;
+}
+
+void MRGenerator::restoreAfterSnapshot()
+{
+    funToRefsMap = funToRefsMap_snapshot;
+    funToModsMap = funToModsMap_snapshot;
+    csToRefsMap = csToRefsMap_snapshot;
+    csToModsMap = csToModsMap_snapshot;
+    csToCallSiteArgsPtsMap = csToCallSiteArgsPtsMap_snapshot;
+    csToCallSiteRetPtsMap = csToCallSiteRetPtsMap_snapshot;
+    allGlobals = allGlobals_snapshot;
 }
 
 void MRGenerator::generateMRs_exh_step2(MemSSAStat* _stat)
@@ -540,9 +563,9 @@ void MRGenerator::collectModRefForLoadStore_inc()
         if (storeUnchanged && loadUnchanged)
         {
             // Do not handle unchanged function
-            // reset the funToPointsToMap of store/load unchanged function
-            funToPointsToMap[&fun].clear();
-            funToPointsToMap[&fun] = funToPointsToMap_ls[&fun];
+            // funToPointsToMap already contains both load/store and call contributions
+            // from generateMRs_exh_step1(); do not overwrite with funToPointsToMap_ls
+            // which only has load/store contributions.
             continue;
         }
         // handle changed function
@@ -755,6 +778,9 @@ void MRGenerator::incrementalModRefAnalysis()
     double incLSEnd = stat->getClk();
     SVFUtil::outs() << "Time of CollectModRefForLoadStore_inc: " << (incLSEnd - incLSStart) / TIMEINTERVAL << "\n";
     
+    // Restore after-state snapshots to avoid before-state PTA corruption
+    restoreAfterSnapshot();
+    
     // U/D_callsite |= (N_callsite \intersection U/D_callee) \union (G \intersection U/D_callee)
     // 
     // 1. reset and propagate del ref and del mod from the bottom up based on old globs and argspts/retspts
@@ -764,6 +790,12 @@ void MRGenerator::incrementalModRefAnalysis()
     //      from the bottom up base on the function mod/ref set changed
     // 5. recompute mod/ref from the bottom up
 
+    // If no local mod/ref changed, skip steps 1-5 to avoid corrupting
+    // csToRefsMap/csToModsMap with before-state PTA during reset round.
+    bool skipSteps1To5 = mods_lsChangedFunctions.empty() && refs_lsChangedFunctions.empty();
+    if (skipSteps1To5) {
+        SVFUtil::outs() << "Skipping steps 1-5: no local mod/ref changes detected.\n";
+    } else {
     // 1. reset and propagate del ref and del mod from the bottom up based on old globs and argspts/retspts
     SVFUtil::outs() << "Deletion Mod Ref Reset and Propagation Starts...\n";
     resetModSum = 0;
@@ -918,6 +950,7 @@ void MRGenerator::incrementalModRefAnalysis()
     SVFUtil::outs() << "Time of recomputing mod ref: " << (rcEnd - rcStart)/TIMEINTERVAL << "\n";
     SVFUtil::outs() << "reset Mod element num: " << resetModSum << "\n";
     SVFUtil::outs() << "reset Ref element num: " << resetRefSum << "\n";
+    }
     
     // 6. addCPtsToCallSite
     SVFUtil::outs() << "AddCPtsToCallSite Starts...\n";

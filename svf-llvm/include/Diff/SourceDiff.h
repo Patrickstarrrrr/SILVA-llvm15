@@ -79,7 +79,7 @@ private:
         getRootDir(beforeDir, beforeRootDir);
         getRootDir(afterDir, afterRootDir);
 
-        vector<string> includedSuffix = {".h", ".hpp", ".c", ".cpp", ".cc"};
+        vector<string> includedSuffix = {".h", ".hpp", ".c", ".cpp", ".cc", ".cbs", ".hbs"};
         string includedSuffixPattern = parseSuffix(includedSuffix);
         string cmd_find = "find " 
                         + beforeDir 
@@ -174,7 +174,7 @@ private:
     }
     bool isSourceFile(string& file)
     {
-        string pattern[] = {".h", ".hpp", ".c", ".cpp", ".cc"};
+        string pattern[] = {".h", ".hpp", ".c", ".cpp", ".cc", ".cbs", ".hbs"};
         for(string& suffix : pattern) {
             if(hasSuffix(file, suffix))
                 return true;
