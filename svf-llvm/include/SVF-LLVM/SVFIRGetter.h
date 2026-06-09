@@ -37,7 +37,9 @@ public:
         {
             irGetter = std::unique_ptr<SVFIRGetter>(new SVFIRGetter(SVFIR::getPAG()->getModule()));
             IRDiffHandler* irDiff = IRDiffHandler::getIRDiffHandler();
-            if (Options::IsNew()) {
+
+            // Process added instructions
+            {
                 InstructionSet& insts = irDiff->getInstAddSet();
                 for (auto inst: insts) {
                     irGetter->setCurrentLocation(inst,inst->getParent());
@@ -54,7 +56,14 @@ public:
                     irGetter->pag->getDiffIndireCallSites().insert(cs);
                 }
             }
-            else {
+
+            // Clear temp state for delete processing
+            irGetter->stmts.clear();
+            irGetter->direCallsites.clear();
+            irGetter->indireCallsites.clear();
+
+            // Process deleted instructions
+            {
                 InstructionSet& insts = irDiff->getInstDeleteSet();
                 for (auto inst: insts) {
                     irGetter->setCurrentLocation(inst,inst->getParent());

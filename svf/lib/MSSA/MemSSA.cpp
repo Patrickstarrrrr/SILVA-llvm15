@@ -185,6 +185,7 @@ void MemSSA::createMUCHI(const SVFFunction& fun)
                         ebit = pagEdgeList.end(); bit != ebit; ++bit)
                 {
                     const PAGEdge* inst = *bit;
+                    if (inst->isDeleted) continue;
                     if (const LoadStmt* load = SVFUtil::dyn_cast<LoadStmt>(inst))
                         AddLoadMU(bb, load, mrGen->getLoadMRSet(load));
                     else if (const StoreStmt* store = SVFUtil::dyn_cast<StoreStmt>(inst))

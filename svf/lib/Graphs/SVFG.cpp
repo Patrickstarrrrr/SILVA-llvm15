@@ -259,6 +259,7 @@ void SVFG::addSVFGNodesForAddrTakenVars()
                 stores.end(); iter != eiter; ++iter)
     {
         StoreStmt* store = SVFUtil::cast<StoreStmt>(*iter);
+        if (store->isDeleted) continue;
         const StmtSVFGNode* sNode = getStmtVFGNode(store);
         for(CHISet::iterator pi = mssa->getCHISet(store).begin(), epi = mssa->getCHISet(store).end(); pi!=epi; ++pi)
             setDef((*pi)->getResVer(),sNode);

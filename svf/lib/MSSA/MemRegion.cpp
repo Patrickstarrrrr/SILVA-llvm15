@@ -877,7 +877,23 @@ void MRGenerator::incrementalModRefAnalysis()
     funToDelModsMap.clear();
     funToDelRefsMap.clear();
 
-    
+    // Re-populate funToDelModsMap/RefsMap for step 4 (delGlobsArgsRetsPtsAnalysis),
+    // because delModAnalysis/delRefAnalysis in step 1 already consumed them.
+    for (auto it = mods_lsChangedFunctions.begin(), eit = mods_lsChangedFunctions.end(); it != eit; ++it) {
+        const SVFFunction* fun = *it;
+        NodeBS dMod = funToModsMap_ls_t[fun] - funToModsMap_ls[fun];
+        if (!dMod.empty()) {
+            funToDelModsMap[fun] |= dMod;
+        }
+    }
+    for (auto it = refs_lsChangedFunctions.begin(), eit = refs_lsChangedFunctions.end(); it != eit; ++it) {
+        const SVFFunction* fun = *it;
+        NodeBS dRef = funToRefsMap_ls_t[fun] - funToRefsMap_ls[fun];
+        if (!dRef.empty()) {
+            funToDelRefsMap[fun] |= dRef;
+        }
+    }
+
     SVFUtil::outs() << "Impacted function num: " << impactFunc << "\n";
 
     // 2. recompute globs and get del globs

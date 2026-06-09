@@ -129,25 +129,26 @@ void IRDiffHandler::parse()
     // _new = newm;
     // _old = oldm;
     ModuleParser mod;
-    SourceDiffHandler* h = SourceDiffHandler::getSourceDiffHandler();    
-    
-    if (SVF::Options::IsNew())
-    {
-        mod.parse(h->getAddDiff(), VarAddSet, FunAddSet, InstAddSet, false);
-        for (auto I : InstAddSet)
-        {
-            const Function* F = I->getParent()->getParent();
-            FunBodyAddSet.insert(F);
-        }
+    SourceDiffHandler* h = SourceDiffHandler::getSourceDiffHandler();
+
+    // Parse addDiff: try after-dir first, then before-dir
+    mod.parse(h->getAddDiff(), VarAddSet, FunAddSet, InstAddSet, false);
+    if (InstAddSet.empty()) {
+        mod.parse(h->getAddDiff(), VarAddSet, FunAddSet, InstAddSet, true);
     }
-    else
-    {
-        mod.parse(h->getDeleteDiff(), VarDeleteSet, FunDeleteSet, InstDeleteSet, true);
-        for (auto I : InstDeleteSet)
-        {
-            const Function* F = I->getParent()->getParent();
-            FunBodyDeleteSet.insert(F);
-        }
+    for (auto I : InstAddSet) {
+        const Function* F = I->getParent()->getParent();
+        FunBodyAddSet.insert(F);
+    }
+
+    // Parse deleteDiff: try before-dir first, then after-dir
+    mod.parse(h->getDeleteDiff(), VarDeleteSet, FunDeleteSet, InstDeleteSet, true);
+    if (InstDeleteSet.empty()) {
+        mod.parse(h->getDeleteDiff(), VarDeleteSet, FunDeleteSet, InstDeleteSet, false);
+    }
+    for (auto I : InstDeleteSet) {
+        const Function* F = I->getParent()->getParent();
+        FunBodyDeleteSet.insert(F);
     }
 }
 
