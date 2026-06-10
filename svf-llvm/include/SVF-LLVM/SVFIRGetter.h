@@ -7,6 +7,7 @@
 #include "SVF-LLVM/LLVMModule.h"
 #include "SVF-LLVM/LLVMUtil.h"
 #include "Diff/IRDiff.h"
+#include "Util/Options.h"
 
 namespace SVF
 {
@@ -38,8 +39,8 @@ public:
             irGetter = std::unique_ptr<SVFIRGetter>(new SVFIRGetter(SVFIR::getPAG()->getModule()));
             IRDiffHandler* irDiff = IRDiffHandler::getIRDiffHandler();
 
-            // Process added instructions
-            {
+            // Only process added instructions in is-new mode (insertion round)
+            if (Options::IsNew()) {
                 InstructionSet& insts = irDiff->getInstAddSet();
                 for (auto inst: insts) {
                     irGetter->setCurrentLocation(inst,inst->getParent());
@@ -55,15 +56,13 @@ public:
                 for (auto cs: irGetter->indireCallsites) {
                     irGetter->pag->getDiffIndireCallSites().insert(cs);
                 }
+                irGetter->stmts.clear();
+                irGetter->direCallsites.clear();
+                irGetter->indireCallsites.clear();
             }
 
-            // Clear temp state for delete processing
-            irGetter->stmts.clear();
-            irGetter->direCallsites.clear();
-            irGetter->indireCallsites.clear();
-
-            // Process deleted instructions
-            {
+            // Only process deleted instructions in non-is-new mode (deletion round)
+            if (!Options::IsNew()) {
                 InstructionSet& insts = irDiff->getInstDeleteSet();
                 for (auto inst: insts) {
                     irGetter->setCurrentLocation(inst,inst->getParent());
