@@ -8,6 +8,20 @@ using namespace SVFUtil;
 
 IRDiffHandler *IRDiffHandler::irDiffHandler = nullptr;
 
+void IRDiffHandler::reset()
+{
+    addVec.clear();
+    deleteVec.clear();
+    FunAddSet.clear();
+    FunDeleteSet.clear();
+    FunBodyAddSet.clear();
+    FunBodyDeleteSet.clear();
+    VarAddSet.clear();
+    VarDeleteSet.clear();
+    InstAddSet.clear();
+    InstDeleteSet.clear();
+}
+
 void ModuleParser::parse(FileToDiffMapTy& sourceInfos,
                          GlobalVariableSetTy& vars, 
                          FunctionSetTy& functions, 

@@ -82,6 +82,12 @@ public:
         }
         return irGetter.get();
     }
+
+    static inline void releaseSVFIRGetter()
+    {
+        irGetter.reset();
+    }
+
     /// Constructor
     SVFIRGetter(SVFModule* mod): pag(SVFIR::getPAG()), svfModule(mod), curBB(nullptr),curVal(nullptr)
     {

@@ -148,6 +148,14 @@ public:
         return irDiffHandler;
     }
 
+    static void releaseIRDiffHandler()
+    {
+        delete irDiffHandler;
+        irDiffHandler = nullptr;
+    }
+
+    void reset();
+
     void initSourceDiffInfo(vector<sourceDiffInfo>, vector<sourceDiffInfo>);
 
     // void parse(SVF::SVFModule *oldm, SVF::SVFModule *newm);

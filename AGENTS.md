@@ -13,10 +13,12 @@
   - `svf-llvm/include/SVF-LLVM/SVFIRGetter.h` — mode-gated diff processing
   - `AGENTS.md` (this file) — new
   - `test_is_new_false.py` — smarter expected-result logic
+  - `-continuous` mode support (new option, singleton reset helpers, refactored `wpa.cpp`)
+  - `test_continuous_mode.py` — smoke test for `-continuous`
 
-## 2. Recent Fix (This Session)
+## 2. Recent Fixes / Features (This Session)
 
-### `SVFIRGetter::getSVFIRGetter()` was processing both add and delete diffs unconditionally
+### 2.1 `SVFIRGetter::getSVFIRGetter()` mode-gated diff processing
 **File:** `svf-llvm/include/SVF-LLVM/SVFIRGetter.h`
 
 **Symptom:**  
@@ -31,9 +33,32 @@ Gated the two processing blocks with `Options::IsNew()`:
 - `is-new=true` → only mark statements from `InstAddSet` as `isInserted`.
 - `is-new=false` → only mark statements from `InstDeleteSet` as `isDeleted`.
 
-This is the **only code change** made in this session; the rest of the
-infrastructure (`VFG/SVFG/MemSSA` `isDeleted` skips, `IRDiff` bidirectional
-matching, `MemRegion` snapshots) was already in place at HEAD.
+### 2.2 New `-continuous` mode
+**Files:** `wpa.cpp`, `WPAPass.{h,cpp}`, `Options.{h,cpp}`,
+`IRDiff.{h,cpp}`, `SourceDiff.{h,cpp}`, `SVFIRGetter.h`, `LLVMModule.h`
+
+**Behavior:**  
+`wpa -continuous` keeps the process alive, reads one analysis round per line
+from stdin, and automatically selects the analysis strategy:
+- **Diff has no added instructions** → run `Andersen_INC` incremental deletion.
+- **Diff has added instructions** → fall back to full `Andersen_WPA`.
+
+**Input protocol:**
+```bash
+./build/bin/wpa -continuous -svfg -irdiff -relapath
+-beforecpp <dir> -aftercpp <dir> <bitcode>
+-beforecpp <dir2> -aftercpp <dir2> <bitcode2>
+quit
+```
+
+`-sourcediff` is optional in continuous mode. If omitted, the diff file is
+auto-generated as `./.silva_continuous_diff_round_<n>.txt` from the given
+`-beforecpp` and `-aftercpp` directories.
+
+**Singleton reset helpers added:** `IRDiffHandler::releaseIRDiffHandler()` /
+`reset()`, `SourceDiffHandler::releaseSourceDiffHandler()`,
+`SVFIRGetter::releaseSVFIRGetter()`, and `LLVMModuleSet::releaseLLVMModuleSet()`
+now resets `preProcessed`.
 
 ## 3. Verification Results
 
@@ -108,6 +133,9 @@ serialisation paths work correctly.
 # inc-test suite
 python3 test_all_swapped.py
 python3 test_is_new_false.py
+
+# continuous mode smoke test
+python3 test_continuous_mode.py
 ```
 
 ## 6. Key Code Locations

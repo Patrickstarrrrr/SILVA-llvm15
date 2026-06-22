@@ -111,6 +111,7 @@ public:
     {
         delete llvmModuleSet;
         llvmModuleSet = nullptr;
+        preProcessed = false;
     }
 
     static SVFModule* buildSVFModule(Module& mod);
