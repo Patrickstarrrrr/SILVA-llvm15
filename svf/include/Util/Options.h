@@ -301,7 +301,7 @@ public:
     /// @brief continuous mode for incremental analysis
     static const Option<bool> Continuous;
     /// @brief for ir diff
-    static const Option<bool> relapath;
+    static Option<bool> relapath;
     static Option<std::string> aftercpp;
     static Option<std::string> beforecpp;
     static Option<std::string> sourcediff;

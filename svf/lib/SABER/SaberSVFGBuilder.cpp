@@ -32,9 +32,50 @@
 #include "MemoryModel/PointerAnalysisImpl.h"
 #include "Graphs/SVFG.h"
 #include "Util/Options.h"
+#include "WPA/AndersenInc.h"
 
 using namespace SVF;
 using namespace SVFUtil;
+
+SVFG* SaberSVFGBuilder::buildPTROnlySVFG_inc(BVDataPTAImpl* pta)
+{
+    auto mssa = buildPTROnlySVFG_step1(pta);
+    AndersenInc* incAnder = SVFUtil::dyn_cast<AndersenInc>(pta);
+    assert(incAnder && "incremental SVFG build requires AndersenInc");
+    if (Options::IsNew())
+    {
+        incAnder->analyze_inc_reset();
+        mssa->generate_inc();
+        incAnder->analyze_inc();
+        mssa->generate_inc();
+    }
+    else
+    {
+        incAnder->analyze_inc();
+        mssa->generate_inc();
+    }
+    return buildPTROnlySVFG_step2(pta, std::move(mssa));
+}
+
+SVFG* SaberSVFGBuilder::buildFullSVFG_inc(BVDataPTAImpl* pta)
+{
+    auto mssa = buildFullSVFG_step1(pta);
+    AndersenInc* incAnder = SVFUtil::dyn_cast<AndersenInc>(pta);
+    assert(incAnder && "incremental SVFG build requires AndersenInc");
+    if (Options::IsNew())
+    {
+        incAnder->analyze_inc_reset();
+        mssa->generate_inc();
+        incAnder->analyze_inc();
+        mssa->generate_inc();
+    }
+    else
+    {
+        incAnder->analyze_inc();
+        mssa->generate_inc();
+    }
+    return buildFullSVFG_step2(pta, std::move(mssa));
+}
 
 void SaberSVFGBuilder::buildSVFG()
 {

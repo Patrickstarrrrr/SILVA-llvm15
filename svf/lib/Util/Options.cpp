@@ -1036,7 +1036,7 @@ const Option<bool> Options::Continuous(
     false
 );
 
-const Option<bool> Options::relapath(
+Option<bool> Options::relapath(
     "relapath", 
     "wether to use relative path in diff recognition",
     false

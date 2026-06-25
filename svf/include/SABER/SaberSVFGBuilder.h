@@ -51,6 +51,10 @@ public:
     /// Destructor
     virtual ~SaberSVFGBuilder() {}
 
+    /// Build SVFG incrementally (step1 + inc MRA + step2) for SABER.
+    SVFG* buildPTROnlySVFG_inc(BVDataPTAImpl* pta);
+    SVFG* buildFullSVFG_inc(BVDataPTAImpl* pta);
+
     inline bool isGlobalSVFGNode(const SVFGNode* node) const
     {
         return globSVFGNodes.find(node)!=globSVFGNodes.end();

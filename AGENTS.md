@@ -11,6 +11,9 @@
   `isDeleted` skip logic in `VFG.cpp`, `SVFG.cpp`, and `MemSSA.cpp`.
 - **Uncommitted changes (current session):**
   - `svf-llvm/include/SVF-LLVM/SVFIRGetter.h` — mode-gated diff processing
+  - `svf/lib/SABER/SaberSVFGBuilder.{h,cpp}` — incremental SVFG build helpers
+  - `svf/lib/SABER/SrcSnkDDA.cpp` — route to incremental SVFG build under `-irdiff`
+  - `svf-llvm/tools/SABER/saber.cpp` — clean up debug prints, add `-continuous` mode
   - `AGENTS.md` (this file) — new
   - `test_is_new_false.py` — smarter expected-result logic
   - `-continuous` mode support (new option, singleton reset helpers, refactored `wpa.cpp`)
@@ -84,6 +87,66 @@ python3 test_is_new_false.py   # ✅ overall OK (see caveats below)
   instruction-level deletions.  test1-4 are flagged as *expected failures*
   because their diffs modify function signatures.
 
+### 2.3 SABER incremental SVFG build
+**Files:** `svf/lib/SABER/SaberSVFGBuilder.{h,cpp}`, `svf/lib/SABER/SrcSnkDDA.cpp`,
+`svf-llvm/tools/SABER/saber.cpp`
+
+**Symptom:**
+With `-irdiff`, SABER's `SaberSVFGBuilder` previously called the monolithic
+`buildPTROnlySVFG/buildFullSVFG` path.  Under `-irdiff` this only executed
+MemSSA `generateMRs_exh_step1` and never ran the incremental mod-ref update
+(`generate_inc`) nor the step-2 partitioning (`generateMRs_exh_step2`).  The
+resulting SVFG was far smaller than the full-analysis SVFG and LeakChecker
+reported only ~38 leaks instead of the expected 341.
+
+**Fix:**
+Added `buildPTROnlySVFG_inc` / `buildFullSVFG_inc` to `SaberSVFGBuilder`.  They
+follow the same three-phase protocol used by `WPAPass`:
+1. `build*_step1` to create an empty `MemSSA`.
+2. `AndersenInc::analyze_inc[_reset]()` + `MemSSA::generate_inc()` for the
+   incremental points-to and mod-ref update (with the reset round for
+   `-is-new`).
+3. `build*_step2` to materialise the SVFG, which invokes the overridden
+   `SaberSVFGBuilder::buildSVFG()` so SABER's custom edge/node modifications
+   (`rmDerefDirSVFGEdges`, `rmIncomingEdgeForSUStore`,
+   `AddExtActualParmSVFGNodes`) are still applied.
+
+`SrcSnkDDA::initialize()` now routes to the `_inc` variants when
+`Options::irdiff()` is set, otherwise it keeps the original monolithic path.
+Residual `DEBUG:` prints in `saber.cpp` were removed.
+
+**Verification:**
+| Configuration | NeverFree leaks | TotalNode | TotalEdge | Match |
+|---|---:|---:|---:|:--:|
+| Full after | 341 | 32838 | 39141 | — |
+| `-irdiff -is-new=false` (delete block) | 341 | 32838 | 39141 | ✅ |
+| `-irdiff -is-new` (add block) | 341 | 32838 | 39141 | ✅ |
+
+### 2.4 SABER `-continuous` mode
+**Files:** `svf-llvm/tools/SABER/saber.cpp`
+
+**Behavior:**
+`saber -leak -continuous` keeps the process alive and reads one analysis round
+per line from stdin, following the same protocol as `wpa -continuous`:
+- **Diff is pure deletion** → runs incremental SABER with `Andersen_INC`
+  (`-irdiff -is-new=false`).
+- **Diff contains additions or is empty** → falls back to full SABER with
+  `Andersen_WPA`.
+
+Between rounds all singletons are released (`SVFIR`, `LLVMModuleSet`,
+`SymbolTableInfo`, `NodeIDAllocator`, `AndersenInc`, `AndersenWaveDiff`, and the
+diff handlers) so the next round starts from a clean state.
+
+**Verification:**
+```bash
+printf '%s\n' \
+  "-beforecpp ./chibicc_main_only_block_work/before -aftercpp ./chibicc_main_only_block_work/after -sourcediff ./sourceDiff_chibicc_main_only_block.txt ./chibicc_main_only_block_work/chibicc_before.bc" \
+  "-beforecpp ./chibicc_main_only_block_work/after -aftercpp ./chibicc_main_only_block_work/before -sourcediff ./sourceDiff_chibicc_main_only_block_add.txt ./chibicc_main_only_block_work/chibicc_after.bc" \
+  "quit" \
+  | ./SILVA-llvm15/build/bin/saber -leak -continuous -relapath
+```
+Both rounds report 341 `NeverFree` leaks and match the full analysis.
+
 ## 4. Known Limitations
 
 ### 4.1 `is-new=false` cannot handle function-signature changes
@@ -126,9 +189,24 @@ serialisation paths work correctly.
     -aftercpp  ./chibicc_incremental_work/before \
     ./chibicc_incremental_work/chibicc_after.bc
 
+# SABER leak checker (incremental deletion)
+./SILVA-llvm15/build/bin/saber -leak -irdiff -is-new=false -relapath \
+    -sourcediff ./sourceDiff_chibicc_main_only_block.txt \
+    -beforecpp ./chibicc_main_only_block_work/before \
+    -aftercpp  ./chibicc_main_only_block_work/after \
+    ./chibicc_main_only_block_work/chibicc_before.bc
+
+# SABER continuous mode (two rounds: delete then add)
+printf '%s\n' \
+    "-beforecpp ./chibicc_main_only_block_work/before -aftercpp ./chibicc_main_only_block_work/after -sourcediff ./sourceDiff_chibicc_main_only_block.txt ./chibicc_main_only_block_work/chibicc_before.bc" \
+    "-beforecpp ./chibicc_main_only_block_work/after -aftercpp ./chibicc_main_only_block_work/before -sourcediff ./sourceDiff_chibicc_main_only_block_add.txt ./chibicc_main_only_block_work/chibicc_after.bc" \
+    "quit" \
+    | ./SILVA-llvm15/build/bin/saber -leak -continuous -relapath
+
 # Full analyses for comparison
 ./SILVA-llvm15/build/bin/wpa -ander -svfg ./chibicc_incremental_work/chibicc_before.bc
 ./SILVA-llvm15/build/bin/wpa -ander -svfg ./chibicc_incremental_work/chibicc_after.bc
+./SILVA-llvm15/build/bin/saber -leak ./chibicc_main_only_block_work/chibicc_after.bc
 
 # inc-test suite
 python3 test_all_swapped.py
