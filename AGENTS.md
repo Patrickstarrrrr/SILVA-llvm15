@@ -11,8 +11,9 @@
   `isDeleted` skip logic in `VFG.cpp`, `SVFG.cpp`, and `MemSSA.cpp`.
 - **Uncommitted changes (current session):**
   - `svf-llvm/include/SVF-LLVM/SVFIRGetter.h` — mode-gated diff processing
-  - `svf/lib/SABER/SaberSVFGBuilder.{h,cpp}` — incremental SVFG build helpers
+  - `svf/lib/SABER/SaberSVFGBuilder.{h,cpp}` — incremental SVFG build helpers; skip intermediate mod-ref for addition reset
   - `svf/lib/SABER/SrcSnkDDA.cpp` — route to incremental SVFG build under `-irdiff`
+  - `svf/lib/WPA/WPAPass.cpp` — skip intermediate mod-ref for addition reset
   - `svf-llvm/tools/SABER/saber.cpp` — clean up debug prints, add `-continuous` mode
   - `AGENTS.md` (this file) — new
   - `test_is_new_false.py` — smarter expected-result logic
@@ -71,7 +72,7 @@ now resets `preProcessed`.
 |---------------|----------:|----------:|----------:|:-----:|
 | Full old | 1925 | 47368 | 68948 | — |
 | `[old bc] - [del inst]` (`is-new=false`, bc=old) | 1925 | 47368 | 68948 | ✅ full old |
-| `[new bc] - [add] + [add]` (`is-new=true`, bc=new) | 1926 | 47374 | 68956 | ✅ full new |
+| `[new bc]` (`is-new=true`, bc=new, incremental add) | 1926 | 47374 | 68956 | ✅ full new |
 | Swapped `[new_before bc] - [del inst]` (`is-new=false`, bc=after) | 1925 | 47368 | 68948 | ✅ full old |
 
 ### 3.2 inc-test suite
@@ -115,14 +116,46 @@ follow the same three-phase protocol used by `WPAPass`:
 `Options::irdiff()` is set, otherwise it keeps the original monolithic path.
 Residual `DEBUG:` prints in `saber.cpp` were removed.
 
-**Verification:**
-| Configuration | NeverFree leaks | TotalNode | TotalEdge | Match |
-|---|---:|---:|---:|:--:|
-| Full after | 341 | 32838 | 39141 | — |
-| `-irdiff -is-new=false` (delete block) | 341 | 32838 | 39141 | ✅ |
-| `-irdiff -is-new` (add block) | 341 | 32838 | 39141 | ✅ |
+### 2.4 Addition-round skip intermediate mod-ref generation
+**Files:** `svf/lib/WPA/WPAPass.cpp`, `svf/lib/SABER/SaberSVFGBuilder.cpp`
 
-### 2.4 SABER `-continuous` mode
+**Symptom:**
+For `-irdiff -is-new=true` (addition round on the new bitcode), the
+`AndersenInc::analyze_inc_reset()` + `generate_inc()` + `analyze_inc()` +
+`generate_inc()` path produced a different SVFG than the full analysis.  On the
+`test_fail_0630` case (adding pointer arithmetic in `run_linker`), WPA reported
+MemRegions/TotalNode/TotalEdge of 1943/48558/71024 instead of the expected
+1929/47426/69035, and SABER reported 1407/33553/40340 instead of
+1400/32879/39176.
+
+**Fix:**
+The evaluation protocol requires the reset round to simulate
+`[new bc] - [add inst] == [old bc] - [del inst]`, but the intermediate mod-ref
+state from that reset round was corrupting the final SVFG.  We now keep the
+reset pointer-analysis round (`analyze_inc_reset()`) for the intermediate
+simulation, but skip the intermediate `generate_inc()`; only the final
+insertion round generates mod-ref.  Deletion rounds (`-is-new=false`) keep the
+original single `analyze_inc()` + `generate_inc()` path.
+
+Implementation:
+- `WPAPass`: for `IsNew()`, call `analyze_inc_reset()` (reset), then
+  `analyze_inc()` (insertion), then a single `generate_inc()`.
+- `SaberSVFGBuilder::build*_inc`: same `reset + insertion + single generate`
+  sequence for `IsNew()`.
+
+**Verification (test_fail_0630):**
+| Configuration | MemRegions | TotalNode | TotalEdge | Match |
+|---|---:|---:|---:|:--:|
+| WPA full after | 1929 | 47426 | 69035 | — |
+| WPA `-irdiff -is-new=true` | 1929 | 47426 | 69035 | ✅ |
+| WPA full before | 1925 | 47368 | 68948 | — |
+| WPA `-irdiff -is-new=false` | 1925 | 47368 | 68948 | ✅ |
+| SABER full after | 1400 | 32879 | 39176 | — |
+| SABER `-irdiff -is-new=true` | 1400 | 32879 | 39176 | ✅ |
+| SABER full before | 1396 | 32838 | 39141 | — |
+| SABER `-irdiff -is-new=false` | 1396 | 32838 | 39141 | ✅ |
+
+### 2.5 SABER `-continuous` mode
 **Files:** `svf-llvm/tools/SABER/saber.cpp`
 
 **Behavior:**
@@ -162,7 +195,17 @@ Scenarios that **do** work:
 - Pure deletions of local-variable statements (chibicc swapped case).
 - Empty delete diff on the old bitcode (chibicc standard case).
 
-### 4.2 Two-bitcode execution path still untested
+### 4.2 Addition-round intermediate mod-ref generation skipped
+**Status:** fixed.
+
+The `AndersenInc` reset round for `-is-new=true` correctly simulated
+`[new bc] - [add inst]` at the pointer-analysis level, but running
+`generate_inc()` on that intermediate state corrupted the mod-ref information
+used by the final SVFG build.  Addition rounds now keep the reset pointer
+analysis for protocol correctness, but only run `generate_inc()` once after the
+insertion round has restored `[new bc]`.
+
+### 4.3 Two-bitcode execution path still untested
 The original evaluation framework (`execute.py`) passes **two** bitcode files
 (`old.bc` and `new.bc`) to `wpa`.  The current verification has only used the
 one-bitcode path (`README` style).  If you need to validate the full framework
