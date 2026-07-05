@@ -188,6 +188,7 @@ void AndersenInc::analyze_inc_reset()
 void AndersenInc::analyze_inc()
 {
     SVFUtil::outs() << "Initialze incremental edgeVec:\n";
+    deadObjectCandidates.clear();
     getDiffSDK();
     initAllPDM();
 
@@ -213,6 +214,11 @@ void AndersenInc::analyze_inc()
         SVFUtil::outs() << "  - Time of Del Pts Prop: " << timeOfDeletionProp << "\n";
         SVFUtil::outs() << "  - Num of Del Nodes: " << delNodeNum << "\n";
         SVFUtil::outs() << "------------------------------------------------------------------\n";
+
+        // Stack objects whose addr edge was deleted may still be referenced by
+        // stale points-to facts.  Force-remove them so they do not leak into
+        // memory regions / SVFG.
+        cleanupDeadObjects();
     }
 
     // Process insertion edges (isInserted -> ins)
@@ -2020,6 +2026,10 @@ void AndersenInc::processAddrRemoval(NodeID srcid, NodeID dstid)
     
     fCG->removeAddrEdge(SVFUtil::dyn_cast<AddrFCGEdge>(fAddr));
 
+    // srcid is the object node; its address edge was removed, so it is a
+    // candidate for dead-object cleanup at the end of deletion.
+    deadObjectCandidates.set(srcid);
+
     PointsTo srcSet;
     srcSet.set(srcid);
     STAT_TIME(timeOfDeletionProp, propagateDelPts(srcSet, dstid));
@@ -2044,6 +2054,8 @@ void AndersenInc::processAddrRemoval_IPA(NodeID srcid, NodeID dstid)
     }
     
     fCG->removeAddrEdge(SVFUtil::dyn_cast<AddrFCGEdge>(fAddr));
+
+    deadObjectCandidates.set(srcid);
 
     PointsTo srcSet;
     srcSet.set(srcid);
@@ -2070,6 +2082,8 @@ void AndersenInc::processAddrRemoval_Lazy(NodeID srcid, NodeID dstid)
     }
     
     fCG->removeAddrEdge(SVFUtil::dyn_cast<AddrFCGEdge>(fAddr));
+
+    deadObjectCandidates.set(srcid);
 
     PointsTo srcSet;
     srcSet.set(srcid);
@@ -2707,6 +2721,62 @@ void AndersenInc::processNormalGepConstraintRemoval_Lazy(NodeID srcid, NodeID ds
     // STAT_TIME(timeOfDeletionProp, propagateDelPts(tmpPts, dstid));
     dstid = sccRepNode(dstid);
     delPropMap[dstid] |= tmpPts;
+}
+
+void AndersenInc::removeObjFromAllPts(NodeID obj)
+{
+    for (SVFIR::iterator it = pag->begin(), eit = pag->end(); it != eit; ++it)
+    {
+        NodeID id = it->first;
+        if (getPts(id).test(obj))
+            clearPts(id, obj);
+    }
+}
+
+void AndersenInc::cleanupDeadObjects()
+{
+    if (deadObjectCandidates.empty())
+        return;
+
+    // Count live (non-deleted) addr edges per candidate object in one pass.
+    Map<NodeID, unsigned> liveAddrCount;
+    SVFStmt::SVFStmtSetTy& addrs = pag->getPTASVFStmtSet(SVFStmt::Addr);
+    for (SVFStmt::SVFStmtSetTy::iterator it = addrs.begin(), eit = addrs.end();
+         it != eit; ++it)
+    {
+        const AddrStmt* addr = SVFUtil::cast<AddrStmt>(*it);
+        if (addr->isDeleted)
+            continue;
+        NodeID obj = addr->getRHSVarID();
+        if (deadObjectCandidates.test(obj))
+            ++liveAddrCount[obj];
+    }
+
+    unsigned removed = 0;
+    for (NodeID obj : deadObjectCandidates)
+    {
+        if (liveAddrCount[obj] > 0)
+            continue;
+
+        const SVFVar* node = pag->getGNode(obj);
+        const MemObj* mem = nullptr;
+        if (const ObjVar* objNode = SVFUtil::dyn_cast<ObjVar>(node))
+            mem = objNode->getMemObj();
+        else if (const GepObjVar* gepObj = SVFUtil::dyn_cast<GepObjVar>(node))
+            mem = gepObj->getMemObj();
+
+        // Only remove stack objects whose addr edge was deleted.  Global/heap
+        // objects may be reachable through other means, and field objects are
+        // handled via their base object.
+        if (mem && mem->isStack())
+        {
+            removeObjFromAllPts(obj);
+            ++removed;
+        }
+    }
+
+    if (removed > 0)
+        SVFUtil::outs() << "Removed " << removed << " dead stack object(s) from points-to sets.\n";
 }
 
 /*

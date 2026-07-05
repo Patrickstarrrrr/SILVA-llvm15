@@ -668,6 +668,8 @@ void VFG::addVFGNodes()
                 phis.end(); iter != eiter; ++iter)
     {
         const PhiStmt* edge = SVFUtil::cast<PhiStmt>(*iter);
+        if (edge->isDeleted)
+            continue;
         if(isInterestedPAGNode(edge->getRes()))
             addIntraPHIVFGNode(edge);
     }
@@ -677,6 +679,8 @@ void VFG::addVFGNodes()
                 selects.end(); iter != eiter; ++iter)
     {
         const MultiOpndStmt* edge = SVFUtil::cast<MultiOpndStmt>(*iter);
+        if (edge->isDeleted)
+            continue;
         if(isInterestedPAGNode(edge->getRes()))
             addIntraPHIVFGNode(edge);
     }
@@ -686,6 +690,8 @@ void VFG::addVFGNodes()
                 binaryops.end(); iter != eiter; ++iter)
     {
         const BinaryOPStmt* edge = SVFUtil::cast<BinaryOPStmt>(*iter);
+        if (edge->isDeleted)
+            continue;
         if(isInterestedPAGNode(edge->getRes()))
             addBinaryOPVFGNode(edge);
     }
@@ -695,6 +701,8 @@ void VFG::addVFGNodes()
                 unaryops.end(); iter != eiter; ++iter)
     {
         const UnaryOPStmt* edge = SVFUtil::cast<UnaryOPStmt>(*iter);
+        if (edge->isDeleted)
+            continue;
         if(isInterestedPAGNode(edge->getRes()))
             addUnaryOPVFGNode(edge);
     }
@@ -704,6 +712,8 @@ void VFG::addVFGNodes()
                 brs.end(); iter != eiter; ++iter)
     {
         const BranchStmt* edge = SVFUtil::cast<BranchStmt>(*iter);
+        if (edge->isDeleted)
+            continue;
         if(isInterestedPAGNode(edge->getBranchInst()))
             addBranchVFGNode(edge);
     }
@@ -713,6 +723,8 @@ void VFG::addVFGNodes()
                 cmps.end(); iter != eiter; ++iter)
     {
         const CmpStmt* edge = SVFUtil::cast<CmpStmt>(*iter);
+        if (edge->isDeleted)
+            continue;
         if(isInterestedPAGNode(edge->getRes()))
             addCmpVFGNode(edge);
     }

@@ -50,8 +50,12 @@ SVFG* SaberSVFGBuilder::buildPTROnlySVFG_inc(BVDataPTAImpl* pta)
         mssa->generate_inc();
     }
     else {
+        // Deletion round: rebuild MemSSA from scratch on the post-deletion PTA
+        // state.  Incremental MemSSA deletion is currently unreliable (leaves
+        // stale/spurious memory regions), so regenerate regions from scratch
+        // while keeping the PTA update incremental.
         incAnder->analyze_inc();
-        mssa->generate_inc();
+        mssa = buildPTROnlySVFG_step1(pta);
     }
     return buildPTROnlySVFG_step2(pta, std::move(mssa));
 }
@@ -69,8 +73,12 @@ SVFG* SaberSVFGBuilder::buildFullSVFG_inc(BVDataPTAImpl* pta)
         mssa->generate_inc();
     }
     else {
+        // Deletion round: rebuild MemSSA from scratch on the post-deletion PTA
+        // state.  Incremental MemSSA deletion is currently unreliable (leaves
+        // stale/spurious memory regions), so regenerate regions from scratch
+        // while keeping the PTA update incremental.
         incAnder->analyze_inc();
-        mssa->generate_inc();
+        mssa = buildFullSVFG_step1(pta);
     }
     return buildFullSVFG_step2(pta, std::move(mssa));
 }

@@ -139,10 +139,14 @@ void WPAPass::runPointerAnalysis(SVFIR* pag, u32_t kind)
                 mssa->generate_inc();
             }
             else {
-                // incremental pointer analysis
+                // Deletion round: run incremental PTA to remove diff edges from
+                // the new-bitcode state, then rebuild MemSSA from scratch on the
+                // resulting PTA state.  The incremental deletion path in
+                // MemSSA::generate_inc() is currently unreliable and can leave
+                // stale/spurious memory regions, so a fresh rebuild preserves
+                // correctness while still keeping the PTA update incremental.
                 ((AndersenInc*)_pta)->analyze_inc();
-                // incremental mod-ref analysis
-                mssa->generate_inc();
+                mssa = svfgBuilder.buildFullSVFG_step1((BVDataPTAImpl*)_pta);
             }
             
             SVFG *svfg = svfgBuilder.buildFullSVFG_step2((BVDataPTAImpl*)_pta, std::move(mssa));

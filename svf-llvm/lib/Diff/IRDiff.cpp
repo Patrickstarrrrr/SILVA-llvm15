@@ -2,6 +2,7 @@
 #include "Util/SVFUtil.h"
 #include "Util/Options.h"
 #include "SVF-LLVM/LLVMModule.h"
+#include <llvm/IR/IntrinsicInst.h>
 
 using namespace SVF;
 using namespace SVFUtil;
@@ -34,6 +35,28 @@ void ModuleParser::parse(FileToDiffMapTy& sourceInfos,
 
     // int type = (t == DiffType::ADD ? 1 : 2);
     string DIR = before ? SourceDiffHandler::getBeforeRootDir() : SourceDiffHandler::getAfterRootDir();
+
+    auto addAddressedValueFromDbgIntrinsic = [&](const Instruction& inst, InstructionSetTy& insts) {
+        // llvm.dbg.declare describes the association between a local variable
+        // and its address (usually an alloca).  The alloca itself often has no
+        // debug location, so we explicitly pull it into the diff set here.
+        if (const DbgDeclareInst* dbg = SVFUtil::dyn_cast<DbgDeclareInst>(&inst))
+        {
+            if (Value* v = dbg->getAddress())
+            {
+                if (Instruction* alloca = SVFUtil::dyn_cast<Instruction>(v))
+                    insts.insert(alloca);
+            }
+        }
+        else if (const DbgValueInst* dbg = SVFUtil::dyn_cast<DbgValueInst>(&inst))
+        {
+            if (Value* v = dbg->getValue())
+            {
+                if (Instruction* alloca = SVFUtil::dyn_cast<Instruction>(v))
+                    insts.insert(alloca);
+            }
+        }
+    };
 
     auto parseModule = [&](Module& mod) {
         // GlobalVar Diff
@@ -122,6 +145,10 @@ void ModuleParser::parse(FileToDiffMapTy& sourceInfos,
                                 if (Line >= E.getStart() && Line <= E.getEnd())
                                 {
                                     insts.insert(&inst);
+                                    // For debug intrinsics, also include the
+                                    // underlying alloca/value so its addr edge
+                                    // is part of the diff.
+                                    addAddressedValueFromDbgIntrinsic(inst, insts);
                                     break;
                                 }
                             }

@@ -408,6 +408,7 @@ private:
     StmtSet insStmts; // TODO: -- wjy
     unsigned delNodeNum = 0;
     unsigned insNodeNum = 0;
+    NodeBS deadObjectCandidates;    ///< objects whose addr edge was deleted; may need final cleanup
     // NodeBS ptsChainChangeNodes;
 public:
     inline StmtSet& getDelStmts() { return delStmts; }
@@ -476,6 +477,11 @@ private:
     void processNormalGepEdgeRemoval_Lazy(NodeID srcid, NodeID dstid, const AccessPath& ap);
     void processNormalGepConstraintRemoval(NodeID srcid, NodeID dstid, const AccessPath& ap);
     void processNormalGepConstraintRemoval_Lazy(NodeID srcid, NodeID dstid, const AccessPath& ap);
+
+    /// Remove objects that are no longer reachable after deletion from all
+    /// points-to sets, so they do not leak into memory regions/SVFG.
+    void cleanupDeadObjects();
+    void removeObjFromAllPts(NodeID obj);
 
     void processSCCRedetection();
     bool processSCCRedetection_IPA(NodeID rep);
