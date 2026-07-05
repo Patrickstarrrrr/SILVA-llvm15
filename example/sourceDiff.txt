@@ -1,4 +1,4 @@
-diff -N -r -X DiffPattern.txt before/test.cpp after/test.cpp
+diff -N -r -X DiffPattern.txt ./before/test.cpp ./after/test.cpp
 3c3
 < void foo(int* p) {
 ---

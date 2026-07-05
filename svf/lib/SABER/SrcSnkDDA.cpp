@@ -33,6 +33,7 @@
 #include "Graphs/SVFGStat.h"
 #include "Util/Options.h"
 #include "WPA/Andersen.h"
+#include "WPA/AndersenInc.h"
 
 using namespace SVF;
 using namespace SVFUtil;
@@ -42,13 +43,34 @@ void SrcSnkDDA::initialize(SVFModule* module)
 {
     SVFIR* pag = PAG::getPAG();
 
-    AndersenWaveDiff* ander = AndersenWaveDiff::createAndersenWaveDiff(pag);
-    if(Options::SABERFULLSVFG())
-        svfg =  memSSA.buildFullSVFG(ander);
+    BVDataPTAImpl* pta = nullptr;
+    if (Options::irdiff())
+    {
+        AndersenInc* incAnder = AndersenInc::createAndersenInc(pag);
+        pta = incAnder;
+    }
     else
-        svfg =  memSSA.buildPTROnlySVFG(ander);
+    {
+        AndersenWaveDiff* waveAnder = AndersenWaveDiff::createAndersenWaveDiff(pag);
+        pta = waveAnder;
+    }
+
+    if (Options::irdiff())
+    {
+        if(Options::SABERFULLSVFG())
+            svfg = memSSA.buildFullSVFG_inc(pta);
+        else
+            svfg = memSSA.buildPTROnlySVFG_inc(pta);
+    }
+    else
+    {
+        if(Options::SABERFULLSVFG())
+            svfg = memSSA.buildFullSVFG(pta);
+        else
+            svfg = memSSA.buildPTROnlySVFG(pta);
+    }
     setGraph(memSSA.getSVFG());
-    ptaCallGraph = ander->getPTACallGraph();
+    ptaCallGraph = pta->getPTACallGraph();
     //AndersenWaveDiff::releaseAndersenWaveDiff();
     /// allocate control-flow graph branch conditions
     getSaberCondAllocator()->allocate(getPAG()->getModule());

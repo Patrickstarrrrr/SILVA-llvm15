@@ -473,7 +473,18 @@ void VFG::addVFGNodes()
     for (SVFStmt::SVFStmtSetTy::iterator iter = addrs.begin(), eiter =
                 addrs.end(); iter != eiter; ++iter)
     {
-        addAddrVFGNode(SVFUtil::cast<AddrStmt>(*iter));
+        if ((*iter)->isDeleted) continue;
+        AddrStmt* addr = SVFUtil::cast<AddrStmt>(*iter);
+        // Skip addr nodes whose all uses are deleted (e.g., alloca for a deleted local variable)
+        bool hasLiveUse = false;
+        for (auto edge : addr->getLHSVar()->getOutEdges()) {
+            if (!edge->isDeleted) {
+                hasLiveUse = true;
+                break;
+            }
+        }
+        if (!hasLiveUse && !addr->getLHSVar()->getOutEdges().empty()) continue;
+        addAddrVFGNode(addr);
     }
 
     // initialize copy nodes
@@ -481,6 +492,7 @@ void VFG::addVFGNodes()
     for (SVFStmt::SVFStmtSetTy::iterator iter = copys.begin(), eiter =
                 copys.end(); iter != eiter; ++iter)
     {
+        if ((*iter)->isDeleted) continue;
         const CopyStmt* edge = SVFUtil::cast<CopyStmt>(*iter);
         assert(!isPhiCopyEdge(edge) && "Copy edges can not be a PhiNode (or from PhiNode)");
         addCopyVFGNode(edge);
@@ -491,6 +503,7 @@ void VFG::addVFGNodes()
     for (SVFStmt::SVFStmtSetTy::iterator iter = ngeps.begin(), eiter =
                 ngeps.end(); iter != eiter; ++iter)
     {
+        if ((*iter)->isDeleted) continue;
         addGepVFGNode(SVFUtil::cast<GepStmt>(*iter));
     }
 
@@ -499,6 +512,7 @@ void VFG::addVFGNodes()
     for (SVFStmt::SVFStmtSetTy::iterator iter = loads.begin(), eiter =
                 loads.end(); iter != eiter; ++iter)
     {
+        if ((*iter)->isDeleted) continue;
         addLoadVFGNode(SVFUtil::cast<LoadStmt>(*iter));
     }
 
@@ -507,6 +521,7 @@ void VFG::addVFGNodes()
     for (SVFStmt::SVFStmtSetTy::iterator iter = stores.begin(), eiter =
                 stores.end(); iter != eiter; ++iter)
     {
+        if ((*iter)->isDeleted) continue;
         addStoreVFGNode(SVFUtil::cast<StoreStmt>(*iter));
     }
 

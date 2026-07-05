@@ -129,16 +129,13 @@ void WPAPass::runPointerAnalysis(SVFIR* pag, u32_t kind)
             std::unique_ptr<MemSSA> mssa = svfgBuilder.buildFullSVFG_step1((BVDataPTAImpl*)_pta);
             
             if (Options::IsNew()) {
-                SVFUtil::outs() << "Reset strat...\n";
-                // incremental pointer analysis
+                // For addition rounds on the new bitcode, first run the reset
+                // round (deleting [add inst]) to simulate the intermediate state
+                // [new bc] - [add inst] == [old bc] - [del inst].  Do not
+                // generate mod-ref for this intermediate state.  Then run the
+                // insertion round to restore [new bc] and generate mod-ref.
                 ((AndersenInc*)_pta)->analyze_inc_reset();
-                // incremental mod-ref analysis
-                mssa->generate_inc();
-                SVFUtil::outs() << "Reset end.\n";
-
-                // incremental pointer analysis
                 ((AndersenInc*)_pta)->analyze_inc();
-                // incremental mod-ref analysis
                 mssa->generate_inc();
             }
             else {
@@ -147,45 +144,18 @@ void WPAPass::runPointerAnalysis(SVFIR* pag, u32_t kind)
                 // incremental mod-ref analysis
                 mssa->generate_inc();
             }
-            
             
             SVFG *svfg = svfgBuilder.buildFullSVFG_step2((BVDataPTAImpl*)_pta, std::move(mssa));
 
             /// support mod-ref queries only for -ander
             if (Options::PASelected(PointerAnalysis::AndersenWaveDiff_WPA))
                 _svfg = svfg;
-
         }
         else {
-            // SVFGBuilder svfgBuilder(true);
-            // std::unique_ptr<MemSSA> mssa = svfgBuilder.buildFullSVFG_step1((BVDataPTAImpl*)_pta);
-            
-            if (Options::IsNew()) {
-                SVFUtil::outs() << "Reset strat...\n";
-                // incremental pointer analysis
-                ((AndersenInc*)_pta)->analyze_inc_reset();
-                // incremental mod-ref analysis
-                // mssa->generate_inc();
-                SVFUtil::outs() << "Reset end.\n";
-
-                // incremental pointer analysis
+            // incremental pointer analysis (deletion rounds); for addition
+            // rounds the base Andersen solve is already correct.
+            if (!Options::IsNew())
                 ((AndersenInc*)_pta)->analyze_inc();
-                // incremental mod-ref analysis
-                // mssa->generate_inc();
-            }
-            else {
-                // incremental pointer analysis
-                ((AndersenInc*)_pta)->analyze_inc();
-                // incremental mod-ref analysis
-                // mssa->generate_inc();
-            }
-            
-            
-            // SVFG *svfg = svfgBuilder.buildFullSVFG_step2((BVDataPTAImpl*)_pta, std::move(mssa));
-
-            /// support mod-ref queries only for -ander
-            // if (Options::PASelected(PointerAnalysis::AndersenWaveDiff_WPA))
-            //     _svfg = svfg;
         }
     }
     else {

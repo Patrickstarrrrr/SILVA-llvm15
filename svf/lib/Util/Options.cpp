@@ -1024,31 +1024,37 @@ const Option<u32_t> Options::IncRound(
 );
 
 // parse new module or not
-const Option<bool> Options::IsNew(
+Option<bool> Options::IsNew(
     "is-new",
     "Parse new module or not",
     false
 );
 
-const Option<bool> Options::relapath(
+const Option<bool> Options::Continuous(
+    "continuous",
+    "Enable continuous mode: read per-round parameters from stdin and auto-select incremental/full analysis",
+    false
+);
+
+Option<bool> Options::relapath(
     "relapath", 
     "wether to use relative path in diff recognition",
     false
 );
 
-const Option<std::string> Options::aftercpp(
+Option<std::string> Options::aftercpp(
     "aftercpp", 
     "path of after.cpp", 
     ""
 );
 
-const Option<std::string> Options::beforecpp(
+Option<std::string> Options::beforecpp(
     "beforecpp", 
     "path of before.cpp", 
     ""
 );
 
-const Option<std::string> Options::sourcediff(
+Option<std::string> Options::sourcediff(
     "sourcediff", 
     "path of sourcediff.txt", 
     "");
@@ -1059,7 +1065,7 @@ const Option<std::string> Options::diffresult(
     ""
 );
 
-const Option<bool> Options::irdiff(
+Option<bool> Options::irdiff(
     "irdiff", 
     "wether to use diff module",
     false

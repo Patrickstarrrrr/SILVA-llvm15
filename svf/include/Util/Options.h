@@ -297,14 +297,16 @@ public:
     static const Option<double> ChangeProportion;
     static const Option<u32_t> IncRound;
 
-    static const Option<bool> IsNew; // lry
+    static Option<bool> IsNew; // lry
+    /// @brief continuous mode for incremental analysis
+    static const Option<bool> Continuous;
     /// @brief for ir diff
-    static const Option<bool> relapath;
-    static const Option<std::string> aftercpp;
-    static const Option<std::string> beforecpp;
-    static const Option<std::string> sourcediff;
+    static Option<bool> relapath;
+    static Option<std::string> aftercpp;
+    static Option<std::string> beforecpp;
+    static Option<std::string> sourcediff;
     static const Option<std::string> diffresult;
-    static const Option<bool> irdiff;
+    static Option<bool> irdiff;
     static const Option<bool> wjydebug;
     /// for ir diff
 

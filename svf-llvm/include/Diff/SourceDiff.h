@@ -111,6 +111,12 @@ public:
         return sourceDiffHandler;
     }
 
+    static void releaseSourceDiffHandler()
+    {
+        delete sourceDiffHandler;
+        sourceDiffHandler = nullptr;
+    }
+
     void handle();
 
     void parse(string, string);

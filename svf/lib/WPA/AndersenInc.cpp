@@ -141,39 +141,47 @@ void AndersenInc::analyze_inc_reset()
     SVFUtil::outs() << "Initialze incremental edgeVec(Reset):\n";
     getDiffSDK(true);
     initAllPDM();
-    SVFUtil::outs() << "Process deletion analysis(Reset):\n";
-    double delStart = stat->getClk();
-    // processDeletion_EdgeConstraint();
-    if (Options::IPA())
-        processDeletion_EdgeConstraint_IPA();
-    else
-        processDeletion_EdgeConstraint_Lazy();
-    double delEnd = stat->getClk();
-    timeOfDeletionPTA +=  (delEnd - delStart) / TIMEINTERVAL;
-    
-    SVFUtil::outs() << "Time of deletion PTA(Reset): " << timeOfDeletionPTA << "\n";
-    SVFUtil::outs() << "  - Time of SCC Deletion(Reset): " << timeOfDeletionSCC << "\n";
-    SVFUtil::outs() << "    -- Time of SCC Build TempG(Reset): " << sCG->timeOfBuildTempG << "\n";
-    SVFUtil::outs() << "    -- Num of Save TempG(Reset): " << sCG->numOfSaveTempG << "\n";
-    SVFUtil::outs() << "    -- Time of SCC Find(Reset): " << sCG->timeOfSCCFind << "\n";
-    SVFUtil::outs() << "    -- Time of SCC Edge Restore(Reset): " << sCG->timeOfSCCEdgeRestore << "\n";
-    SVFUtil::outs() << "      --- Time of Restore collect edge(Reset): " << sCG->timeOfCollectEdge << "\n";
-    SVFUtil::outs() << "      --- Time of Restore remove edge(Reset): " << sCG->timeOfRemoveEdge << "\n";
-    SVFUtil::outs() << "      --- Time of Restore add edge(Reset): " << sCG->timeOfAddEdge<< "\n";
-    SVFUtil::outs() << "  - Time of Del Pts Prop(Reset): " << timeOfDeletionProp << "\n";
-    SVFUtil::outs() << "  - Num of Del Nodes: " << delNodeNum << "\n";
-    SVFUtil::outs() << "------------------------------------------------------------------\n";
-    // SVFUtil::outs() << "Process insertion analysis(Reset):\n";
-    // double insStart = stat->getClk();
-    // processInsertion();
-    // double insEnd = stat->getClk();
-    // timeOfInsertionPTA += (insEnd - insStart) / TIMEINTERVAL;
-    // SVFUtil::outs() << "Time of insertion PTA: " << timeOfInsertionPTA << "\n";
-    // SVFUtil::outs() << "  - Time of SCC Insertion (so far): " << timeOfInsertionSCC << "\n";
-    // SVFUtil::outs() << "  - Time of Ins Pts Prop: " << timeOfInsertionProp << "\n";
-    // SVFUtil::outs() << "------------------------------------------------------------------\n";
-    // timeOfIncrementalPTA += timeOfDeletionPTA + timeOfInsertionPTA;
-    // SVFUtil::outs() << "Time of incremental PTA: " << timeOfIncrementalPTA << "\n";
+
+    // Reset round: process deletion edges (isInserted -> del)
+    if (!delEdgeVec.empty() || !delDirectEdgeVec.empty()) {
+        SVFUtil::outs() << "Process deletion analysis(Reset):\n";
+        double delStart = stat->getClk();
+        if (Options::IPA())
+            processDeletion_EdgeConstraint_IPA();
+        else
+            processDeletion_EdgeConstraint_Lazy();
+        double delEnd = stat->getClk();
+        timeOfDeletionPTA +=  (delEnd - delStart) / TIMEINTERVAL;
+        SVFUtil::outs() << "Time of deletion PTA(Reset): " << timeOfDeletionPTA << "\n";
+        SVFUtil::outs() << "  - Time of SCC Deletion(Reset): " << timeOfDeletionSCC << "\n";
+        SVFUtil::outs() << "    -- Time of SCC Build TempG(Reset): " << sCG->timeOfBuildTempG << "\n";
+        SVFUtil::outs() << "    -- Num of Save TempG(Reset): " << sCG->numOfSaveTempG << "\n";
+        SVFUtil::outs() << "    -- Time of SCC Find(Reset): " << sCG->timeOfSCCFind << "\n";
+        SVFUtil::outs() << "    -- Time of SCC Edge Restore(Reset): " << sCG->timeOfSCCEdgeRestore << "\n";
+        SVFUtil::outs() << "      --- Time of Restore collect edge(Reset): " << sCG->timeOfCollectEdge << "\n";
+        SVFUtil::outs() << "      --- Time of Restore remove edge(Reset): " << sCG->timeOfRemoveEdge << "\n";
+        SVFUtil::outs() << "      --- Time of Restore add edge(Reset): " << sCG->timeOfAddEdge<< "\n";
+        SVFUtil::outs() << "  - Time of Del Pts Prop(Reset): " << timeOfDeletionProp << "\n";
+        SVFUtil::outs() << "  - Num of Del Nodes: " << delNodeNum << "\n";
+        SVFUtil::outs() << "------------------------------------------------------------------\n";
+    }
+
+    // Reset round also handles insertion edges (isDeleted -> ins)
+    if (!insEdgeVec.empty() || !insDirectEdgeVec.empty()) {
+        SVFUtil::outs() << "Process insertion analysis(Reset):\n";
+        double insStart = stat->getClk();
+        if (Options::IPA())
+            processInsertion_IPA();
+        else
+            processInsertion();
+        double insEnd = stat->getClk();
+        timeOfInsertionPTA += (insEnd - insStart) / TIMEINTERVAL;
+        SVFUtil::outs() << "Time of insertion PTA(Reset): " << timeOfInsertionPTA << "\n";
+        SVFUtil::outs() << "  - Time of SCC Insertion (so far): " << timeOfInsertionSCC << "\n";
+        SVFUtil::outs() << "  - Time of Ins Pts Prop: " << timeOfInsertionProp << "\n";
+        SVFUtil::outs() << "  - Num of Ins Nodes: " << insNodeNum << "\n";
+        SVFUtil::outs() << "------------------------------------------------------------------\n";
+    }
 
     computeAllPDM();
 }
@@ -182,17 +190,17 @@ void AndersenInc::analyze_inc()
     SVFUtil::outs() << "Initialze incremental edgeVec:\n";
     getDiffSDK();
     initAllPDM();
-    if (!Options::IsNew()) {
+
+    // Process deletion edges (isDeleted -> del)
+    if (!delEdgeVec.empty() || !delDirectEdgeVec.empty()) {
         SVFUtil::outs() << "Process deletion analysis:\n";
         double delStart = stat->getClk();
-        // processDeletion_EdgeConstraint();
         if (Options::IPA())
             processDeletion_EdgeConstraint_IPA();
         else
             processDeletion_EdgeConstraint_Lazy();
         double delEnd = stat->getClk();
         timeOfDeletionPTA +=  (delEnd - delStart) / TIMEINTERVAL;
-        timeOfIncrementalPTA = timeOfDeletionPTA;
         SVFUtil::outs() << "Time of deletion PTA: " << timeOfDeletionPTA << "\n";
         SVFUtil::outs() << "  - Time of SCC Deletion: " << timeOfDeletionSCC << "\n";
         SVFUtil::outs() << "    -- Time of SCC Build TempG: " << sCG->timeOfBuildTempG << "\n";
@@ -206,8 +214,9 @@ void AndersenInc::analyze_inc()
         SVFUtil::outs() << "  - Num of Del Nodes: " << delNodeNum << "\n";
         SVFUtil::outs() << "------------------------------------------------------------------\n";
     }
-    
-    if (Options::IsNew()) {
+
+    // Process insertion edges (isInserted -> ins)
+    if (!insEdgeVec.empty() || !insDirectEdgeVec.empty()) {
         SVFUtil::outs() << "Process insertion analysis:\n";
         double insStart = stat->getClk();
         if (Options::IPA())
@@ -221,9 +230,10 @@ void AndersenInc::analyze_inc()
         SVFUtil::outs() << "  - Time of Ins Pts Prop: " << timeOfInsertionProp << "\n";
         SVFUtil::outs() << "  - Num of Ins Nodes: " << insNodeNum << "\n";
         SVFUtil::outs() << "------------------------------------------------------------------\n";
-        timeOfIncrementalPTA = timeOfInsertionPTA;
-        SVFUtil::outs() << "Time of incremental PTA: " << timeOfIncrementalPTA << "\n";
     }
+
+    timeOfIncrementalPTA = timeOfDeletionPTA + timeOfInsertionPTA;
+    SVFUtil::outs() << "Time of incremental PTA: " << timeOfIncrementalPTA << "\n";
 
     double diffstart = stat->getClk();
     computeAllPDM();
@@ -234,7 +244,7 @@ void AndersenInc::analyze_inc()
 
 void AndersenInc::getDiffSDK(bool additionReset)
 {
-    unsigned addrcount = 0, copycount = 0, vgepcount = 0, 
+    unsigned addrcount = 0, copycount = 0, vgepcount = 0,
         ngepcount = 0, loadcount = 0, storecount = 0;
     IRGraph::SVFStmtSet& diffStmts = pag->getDiffStmts();
     for (auto iter = diffStmts.begin(), eiter =
@@ -243,29 +253,59 @@ void AndersenInc::getDiffSDK(bool additionReset)
         const SVFStmt* stmt = *iter;
         if ( !((*iter)->isPTAEdge()) )
             continue;
+
+        // Use isInserted/isDeleted flags to determine edge direction,
+        // independent of Options::IsNew().
+        bool isInserted = stmt->isInserted;
+        bool isDeleted = stmt->isDeleted;
+
+        // Determine target vector based on stmt flag and round:
+        //   - isInserted: reset->del, incremental->ins
+        //   - isDeleted:  reset->ins, incremental->del
+        auto pushSDK = [&](NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind, const AccessPath& ap = AccessPath()) {
+            if (isInserted) {
+                if (!additionReset) {
+                    insEdgeVec.push_back(new SDK(src, dst, kind, ap));
+                } else {
+                    delEdgeVec.push_back(new SDK(src, dst, kind, ap));
+                }
+            } else if (isDeleted) {
+                if (!additionReset) {
+                    delEdgeVec.push_back(new SDK(src, dst, kind, ap));
+                } else {
+                    insEdgeVec.push_back(new SDK(src, dst, kind, ap));
+                }
+            }
+        };
+        auto pushDirectSDK = [&](NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind, const AccessPath& ap = AccessPath()) {
+            if (isInserted) {
+                if (!additionReset) {
+                    insDirectEdgeVec.push_back(new SDK(src, dst, kind, ap));
+                } else {
+                    delDirectEdgeVec.push_back(new SDK(src, dst, kind, ap));
+                }
+            } else if (isDeleted) {
+                if (!additionReset) {
+                    delDirectEdgeVec.push_back(new SDK(src, dst, kind, ap));
+                } else {
+                    insDirectEdgeVec.push_back(new SDK(src, dst, kind, ap));
+                }
+            }
+        };
+
         if (SVFUtil::isa<AddrStmt>(stmt)) {
             addrcount ++;
             const AddrStmt* edge = SVFUtil::cast<AddrStmt>(stmt);
             NodeID src = edge->getRHSVarID();
             NodeID dst = edge->getLHSVarID();
-            if (Options::IsNew() && !additionReset) {
-                insEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FAddr));
-            }
-            else {
-                delEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FAddr));
-            }
+            pushSDK(src, dst, FConstraintEdge::FAddr);
         }
         else if (SVFUtil::isa<CopyStmt>(stmt)) {
             copycount ++;
             const CopyStmt* edge = SVFUtil::cast<CopyStmt>(*iter);
             NodeID src = edge->getRHSVarID();
             NodeID dst = edge->getLHSVarID();
-            if (Options::IsNew() && !additionReset) {
-                insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-            }
-            else {
-                delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-            }
+            pushDirectSDK(src, dst, FConstraintEdge::FCopy);
         }
         else if (SVFUtil::isa<PhiStmt>(stmt)) {
             const PhiStmt* edge = SVFUtil::cast<PhiStmt>(*iter);
@@ -273,12 +313,7 @@ void AndersenInc::getDiffSDK(bool additionReset)
                 copycount++;
                 NodeID src = opVar->getId();
                 NodeID dst = edge->getResID();
-                if (Options::IsNew() && !additionReset) {
-                    insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-                }
-                else {
-                    delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-                }
+                pushDirectSDK(src, dst, FConstraintEdge::FCopy);
             }
         }
         else if (SVFUtil::isa<SelectStmt>(stmt)) {
@@ -287,12 +322,7 @@ void AndersenInc::getDiffSDK(bool additionReset)
                 copycount++;
                 NodeID src = opVar->getId();
                 NodeID dst = edge->getResID();
-                if (Options::IsNew() && !additionReset) {
-                    insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-                }
-                else {
-                    delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-                }
+                pushDirectSDK(src, dst, FConstraintEdge::FCopy);
             }
         }
         else if (SVFUtil::isa<CallPE>(stmt)) {
@@ -300,48 +330,28 @@ void AndersenInc::getDiffSDK(bool additionReset)
             const CallPE* edge = SVFUtil::cast<CallPE>(*iter);
             NodeID src = edge->getRHSVarID();
             NodeID dst = edge->getLHSVarID();
-            if (Options::IsNew() && !additionReset) {
-                insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-            }
-            else {
-                delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-            }
+            pushDirectSDK(src, dst, FConstraintEdge::FCopy);
         }
         else if (SVFUtil::isa<RetPE>(stmt)) {
             copycount ++;
             const RetPE* edge = SVFUtil::cast<RetPE>(*iter);
             NodeID src = edge->getRHSVarID();
             NodeID dst = edge->getLHSVarID();
-            if (Options::IsNew() && !additionReset) {
-                insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-            }
-            else {
-                delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-            }
+            pushDirectSDK(src, dst, FConstraintEdge::FCopy);
         }
         else if (SVFUtil::isa<TDForkPE>(stmt)) {
             copycount ++;
             const TDForkPE* edge = SVFUtil::cast<TDForkPE>(*iter);
             NodeID src = edge->getRHSVarID();
             NodeID dst = edge->getLHSVarID();
-            if (Options::IsNew() && !additionReset) {
-                insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-            }
-            else {
-                delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-            }
+            pushDirectSDK(src, dst, FConstraintEdge::FCopy);
         }
         else if (SVFUtil::isa<TDJoinPE>(stmt)) {
             copycount++;
             const TDJoinPE* edge = SVFUtil::cast<TDJoinPE>(*iter);
             NodeID src = edge->getRHSVarID();
             NodeID dst = edge->getLHSVarID();
-            if (Options::IsNew() && !additionReset) {
-                insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-            }
-            else {
-                delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-            }
+            pushDirectSDK(src, dst, FConstraintEdge::FCopy);
         }
         else if (SVFUtil::isa<GepStmt>(stmt)) {
             const GepStmt* edge = SVFUtil::cast<GepStmt>(*iter);
@@ -349,21 +359,11 @@ void AndersenInc::getDiffSDK(bool additionReset)
             NodeID dst = edge->getLHSVarID();
             if (edge->isVariantFieldGep()) {
                 vgepcount++;
-                if (Options::IsNew() && !additionReset) {
-                    insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FVariantGep));
-                }
-                else {
-                    delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FVariantGep));
-                }
+                pushDirectSDK(src, dst, FConstraintEdge::FVariantGep);
             }
             else {
                 ngepcount++;
-                if (Options::IsNew() && !additionReset) {
-                    insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FNormalGep, edge->getAccessPath()));
-                }
-                else {
-                    delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FNormalGep, edge->getAccessPath()));
-                }
+                pushDirectSDK(src, dst, FConstraintEdge::FNormalGep, edge->getAccessPath());
             }
         }
         else if (SVFUtil::isa<StoreStmt>(stmt)) {
@@ -371,24 +371,14 @@ void AndersenInc::getDiffSDK(bool additionReset)
             const StoreStmt* edge = SVFUtil::cast<StoreStmt>(*iter);
             NodeID src = edge->getRHSVarID();
             NodeID dst = edge->getLHSVarID();
-            if (Options::IsNew() && !additionReset) {
-                insEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FStore));
-            }
-            else {
-                delEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FStore));
-            }
+            pushSDK(src, dst, FConstraintEdge::FStore);
         }
         else if (SVFUtil::isa<LoadStmt>(stmt)) {
             loadcount ++;
             const LoadStmt* edge = SVFUtil::cast<LoadStmt>(*iter);
             NodeID src = edge->getRHSVarID();
             NodeID dst = edge->getLHSVarID();
-            if (Options::IsNew() && !additionReset) {
-                insEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FLoad));
-            }
-            else {
-                delEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FLoad));
-            }
+            pushSDK(src, dst, FConstraintEdge::FLoad);
         }
 
     }
